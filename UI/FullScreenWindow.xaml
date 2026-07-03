@@ -1,0 +1,18 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Wall-E - Full Screen"
+        WindowStyle="None"
+        WindowState="Maximized"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="Black">
+
+    <Grid x:Name="RootGrid">
+        <Image x:Name="ImgFullScreen" Stretch="Uniform"/>
+
+        <TextBlock Text="Esc or click anywhere to exit full screen"
+                    FontSize="12" Foreground="#8C8C94"
+                    HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                    Margin="0,0,0,18"/>
+    </Grid>
+</Window>
