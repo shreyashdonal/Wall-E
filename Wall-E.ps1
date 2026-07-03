@@ -93,6 +93,36 @@ function Get-El { param($Name) $window.FindName($Name) }
 # ---------------------------------------------------------------------------
 $script:FullScreenWindow = $null
 $script:ImgFullScreen    = $null
+$script:HowToWindow      = $null
+
+# ---------------------------------------------------------------------------
+# "How to Use" help window (lazy-loaded on first open, reused after that)
+# ---------------------------------------------------------------------------
+function Show-HowToWindow {
+    # Already open? Just bring it forward.
+    if ($script:HowToWindow -and $script:HowToWindow.IsVisible) {
+        $script:HowToWindow.Activate()
+        return
+    }
+
+    [xml]$htXaml = Get-Content -LiteralPath (Join-Path $root 'UI\HowToWindow.xaml') -Raw -Encoding UTF8
+    $htReader = New-Object System.Xml.XmlNodeReader $htXaml
+    $script:HowToWindow = [System.Windows.Markup.XamlReader]::Load($htReader)
+    $script:HowToWindow.Owner = $window
+
+    $btnClose = $script:HowToWindow.FindName('BtnCloseHowTo')
+    if ($btnClose) { $btnClose.Add_Click({ if ($script:HowToWindow) { $script:HowToWindow.Close() } }) }
+
+    # Esc also closes it.
+    $script:HowToWindow.Add_KeyDown({
+        param($sender, $e)
+        if ($e.Key -eq 'Escape') { $script:HowToWindow.Close() }
+    })
+    $script:HowToWindow.Add_Closed({ $script:HowToWindow = $null })
+
+    $script:HowToWindow.Show()
+    $script:HowToWindow.Activate()
+}
 
 function Initialize-FullScreenWindow {
     if ($script:FullScreenWindow) { return }
@@ -105,9 +135,23 @@ function Initialize-FullScreenWindow {
 
     # Click anywhere, or Esc, to exit full screen.
     $script:FullScreenWindow.Add_MouseLeftButtonDown({ Hide-FullScreenPreview })
+
+    # Keep the app controllable while full screen has focus. S/P are never
+    # global hotkeys, so without this they'd be dead in full screen. The
+    # arrows are a fallback: when the global arrow hotkeys are ON the OS
+    # intercepts them before WPF, so this branch only fires when they're OFF
+    # (no double navigation).
     $script:FullScreenWindow.Add_KeyDown({
         param($sender, $e)
-        if ($e.Key -eq 'Escape') { Hide-FullScreenPreview }
+        switch ($e.Key) {
+            'Escape' { Hide-FullScreenPreview; $e.Handled = $true }
+            'S'      { if ($script:IsPlaying)     { Stop-Play }     else { Start-Play };     $e.Handled = $true }
+            'P'      { if ($script:IsQuickPlaying) { Stop-QuickPlay } else { Start-QuickPlay }; $e.Handled = $true }
+            'Right'  { Stop-Play; Stop-QuickPlay; Go-NextImage;  $e.Handled = $true }
+            'Left'   { Stop-Play; Stop-QuickPlay; Go-PrevImage;  $e.Handled = $true }
+            'Up'     { Stop-Play; Stop-QuickPlay; Go-NextFolder; $e.Handled = $true }
+            'Down'   { Stop-Play; Stop-QuickPlay; Go-PrevFolder; $e.Handled = $true }
+        }
     })
 }
 
@@ -159,6 +203,7 @@ $RbSpeedMedium = Get-El 'RbSpeedMedium'
 $RbSpeedHigh  = Get-El 'RbSpeedHigh'
 $CmbPreviewStretch = Get-El 'CmbPreviewStretch'
 $BtnFullScreen     = Get-El 'BtnFullScreen'
+$BtnHowTo     = Get-El 'BtnHowTo'
 $TxtStatus    = Get-El 'TxtStatus'
 
 # ---------------------------------------------------------------------------
@@ -546,14 +591,16 @@ function Update-QuickPlaySpeedIfRunning {
 # Hotkey enable/disable
 # ---------------------------------------------------------------------------
 function Enable-Hotkeys {
-    $ok = Register-GlobalArrowHotkeys -Window $window `
-            -OnRight { Invoke-OnUiThread { Stop-Play; Stop-QuickPlay; Go-NextImage } } `
-            -OnLeft  { Invoke-OnUiThread { Stop-Play; Stop-QuickPlay; Go-PrevImage } } `
-            -OnUp    { Invoke-OnUiThread { Stop-Play; Stop-QuickPlay; Go-NextFolder } } `
-            -OnDown  { Invoke-OnUiThread { Stop-Play; Stop-QuickPlay; Go-PrevFolder } }
+    $ok = Register-GlobalArrowHotkeys `
+            -OnRight     { Invoke-OnUiThread { Stop-Play; Stop-QuickPlay; Go-NextImage } } `
+            -OnLeft      { Invoke-OnUiThread { Stop-Play; Stop-QuickPlay; Go-PrevImage } } `
+            -OnUp        { Invoke-OnUiThread { Stop-Play; Stop-QuickPlay; Go-NextFolder } } `
+            -OnDown      { Invoke-OnUiThread { Stop-Play; Stop-QuickPlay; Go-PrevFolder } } `
+            -OnSlideshow { Invoke-OnUiThread { if ($script:IsPlaying)      { Stop-Play }      else { Start-Play } } } `
+            -OnQuickPlay { Invoke-OnUiThread { if ($script:IsQuickPlaying) { Stop-QuickPlay } else { Start-QuickPlay } } }
 
     if ($ok) {
-        Set-Status "Global hotkeys active: Right/Left = image, Up/Down = folder."
+        Set-Status "Global hotkeys active: arrows = navigate, S = slideshow, P = quick play. Press Ctrl+Alt+W anywhere to toggle them all."
         $script:Config.HotkeysEnabled = $true
     } else {
         Set-Status "Could not register global hotkeys (another app may own them)." -IsError
@@ -565,7 +612,7 @@ function Enable-Hotkeys {
 
 function Disable-Hotkeys {
     Unregister-GlobalArrowHotkeys
-    Set-Status "Global hotkeys paused. Use the on-screen buttons, or re-enable the checkbox."
+    Set-Status "Global hotkeys paused - arrows and S/P work normally in other apps again. Press Ctrl+Alt+W anywhere to re-enable."
     $script:Config.HotkeysEnabled = $false
     Save-PlayerConfig -Config $script:Config | Out-Null
 }
@@ -649,6 +696,8 @@ $CmbPreviewStretch.Add_SelectionChanged({ Apply-PreviewStretch })
 
 $BtnFullScreen.Add_Click({ Show-FullScreenPreview })
 
+$BtnHowTo.Add_Click({ Show-HowToWindow })
+
 $CmbInterval.Add_SelectionChanged({
     if ($CmbInterval.SelectedItem) {
         $script:Config.SlideshowIntervalSeconds = [int]$CmbInterval.SelectedItem.Tag
@@ -673,8 +722,9 @@ $window.Add_Closing({
     $script:PlayTimer.Stop()
     $script:QuickPlayTimer.Stop()
     $script:WallpaperApplyTimer.Stop()
-    Unregister-GlobalArrowHotkeys
+    Uninitialize-HotkeyInfrastructure
     if ($script:FullScreenWindow) { $script:FullScreenWindow.Close() }
+    if ($script:HowToWindow) { $script:HowToWindow.Close() }
     Save-PlayerConfig -Config $script:Config | Out-Null
 })
 
@@ -688,6 +738,18 @@ $window.Add_Loaded({
     $ChkShuffle.IsChecked = [bool]$script:Config.ShuffleEnabled
     Reload-Library
     Show-CurrentImage
+
+    # Stand up the shared hotkey hook + the always-on Ctrl+Alt+W master
+    # toggle FIRST, before enabling the arrow hotkeys. The toggle flips the
+    # checkbox, which reuses the existing Enable/Disable-Hotkeys event path -
+    # so the arrow hotkeys can be switched on/off from anywhere, even while
+    # the app sits unfocused in the background.
+    $infraOk = Initialize-HotkeyInfrastructure -Window $window -OnToggle {
+        Invoke-OnUiThread { $ChkHotkeys.IsChecked = -not $ChkHotkeys.IsChecked }
+    }
+    if (-not $infraOk) {
+        Set-Status "Ctrl+Alt+W master toggle unavailable (another app may own it). The checkbox still works." -IsError
+    }
 
     if ($script:Config.HotkeysEnabled) {
         $ChkHotkeys.IsChecked = $true   # triggers Enable-Hotkeys via event
@@ -711,5 +773,5 @@ finally {
     $script:PlayTimer.Stop()
     $script:QuickPlayTimer.Stop()
     $script:WallpaperApplyTimer.Stop()
-    Unregister-GlobalArrowHotkeys
+    Uninitialize-HotkeyInfrastructure
 }

@@ -81,15 +81,23 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Margin="0,0,0,10">
-                <TextBlock Text="W A L L - E" FontFamily="Consolas" FontSize="26" FontWeight="Bold"
-                           Foreground="#39FF7A">
-                    <TextBlock.Effect>
-                        <DropShadowEffect Color="#39FF7A" BlurRadius="18" ShadowDepth="0" Opacity="0.9"/>
-                    </TextBlock.Effect>
-                </TextBlock>
-                <TextBlock Text="Movie snapshots as your desktop background" FontSize="11" Foreground="{StaticResource MutedTextBrush}"/>
-            </StackPanel>
+            <Grid Grid.Row="0" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="W A L L - E" FontFamily="Consolas" FontSize="26" FontWeight="Bold"
+                               Foreground="#39FF7A">
+                        <TextBlock.Effect>
+                            <DropShadowEffect Color="#39FF7A" BlurRadius="18" ShadowDepth="0" Opacity="0.9"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
+                    <TextBlock Text="Movie snapshots as your desktop background" FontSize="11" Foreground="{StaticResource MutedTextBrush}"/>
+                </StackPanel>
+                <Button x:Name="BtnHowTo" Grid.Column="1" Content="?  How to Use" Style="{StaticResource NavButton}"
+                        VerticalAlignment="Top" Padding="12,6" FontSize="12" ToolTip="Getting started, shortcuts, and why it beats the built-in slideshow"/>
+            </Grid>
 
             <Grid Grid.Row="1">
                 <Border MinHeight="180" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1" CornerRadius="8">
@@ -170,7 +178,9 @@
                     </ComboBox>
                 </StackPanel>
                 <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
-                    <CheckBox x:Name="ChkHotkeys" Content="Hotkeys enabled (global arrows)" Foreground="{StaticResource TextBrush}" Margin="6,0,0,8" IsChecked="True"/>
+                    <CheckBox x:Name="ChkHotkeys" Content="Hotkeys enabled (global)" Foreground="{StaticResource TextBrush}" Margin="6,0,0,8" IsChecked="True"
+                              ToolTip="Global arrows (navigate) + S (slideshow) + P (quick play) control Wall-E system-wide. Press Ctrl+Alt+W anywhere to toggle the whole group on/off without reopening the app."/>
+                    <TextBlock Text="Toggle anywhere: Ctrl+Alt+W" FontSize="10" Foreground="{StaticResource MutedTextBrush}" Margin="6,0,0,0"/>
                 </StackPanel>
             </Grid>
 
