@@ -89,4 +89,4 @@ Arrow-key hotkeys are global (system-wide); S/P only work while the app
 window is focused.
 =======
 A wallpaper manager that provides multiple functionalities that windows doesn't.
->>>>>>> 74a681becdbb03b5fd87f9829a56e61bcbb64e1d
+
